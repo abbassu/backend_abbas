@@ -41,7 +41,7 @@ const pool = mysql.createPool(dbConfig);
 app.post("/api/users/signup", async (req, res) => {
   try {
     const { username, email, password } = req.body; // Extract user data
-
+    console.log("username, email, password", username, email, password);
     // Check for required fields
     if (!username || !email || !password) {
       return res.status(400).json({ message: "Missing required fields" });
@@ -78,33 +78,22 @@ app.post("/api/users/signup", async (req, res) => {
 app.post("/api/users/signin", async (req, res) => {
   try {
     const { email, password } = req.body; // Extract credentials
-
-    // Check for required fields
     if (!email || !password) {
       return res.status(400).json({ message: "Missing required fields" });
     }
-
-    // Find user by email
     const [rows] = await pool.query("SELECT * FROM Users WHERE email = ?", [
       email,
     ]);
     const user = rows[0]; // Assuming only one user with the email exists
-
-    // Check if user exists
     if (!user) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
-
-    // Compare password hashes
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
-
-    // Sign-in successful! Generate JWT
     const payload = { userId: user.user_id }; // JWT payload with user ID
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "1h" }); // Set JWT expiration time
-
     res.json({ message: "Sign in successful!", token });
   } catch (error) {
     console.error(error);
@@ -115,6 +104,7 @@ app.post("/api/users/signin", async (req, res) => {
 const verifyJWT = (req, res, next) => {
   const authHeader = req.headers.authorization;
 
+  console.log("req.headers.authorization;", req.headers.authorization);
   // Check if authorization header is present and formatted correctly
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return res.status(401).json({ message: "Unauthorized" });
@@ -135,67 +125,38 @@ const verifyJWT = (req, res, next) => {
 };
 ///////////////////////////
 
+app.post("/api/posts", verifyJWT, async (req, res) => {
+  try {
+    const { content, title } = req.body;
+
+    if (!content || !title) {
+      return res
+        .status(400)
+        .json({ message: "Missing required fields: content and title" });
+    }
+
+    const [rows] = await pool.query(
+      "INSERT INTO Posts (user_id, content, title) VALUES (?, ?, ?)",
+      [req.user.userId, content, title]
+    );
+    const postId = rows.insertId;
+
+    res.json({
+      message: "Post created successfully!",
+      postId,
+      ID: req.user.userId,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error creating post" });
+  }
+});
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// app.post("/api/users", async (req, res) => {
-//   try {
-//     const { username, email, password } = req.body; // Extract user data
-//     console.log("req.body", username, email, password);
-//     // Check for required fields (improve error handling)
-//     if (!username || !email || !password) {
-//       return res.status(400).json({ message: "Missing required fields" });
-//     }
+// Protected route for adding categories (requires valid JWT, optional)
 
-//     // Validate email format (optional)
-
-//     // Hash password before storing
-//     const hashedPassword = await bcrypt.hash(password, 10); // Adjust cost factor as needed
-
-//     // Check for existing user with email (improve error handling)
-//     // const [existingUser] = await db.query(
-//     //   "SELECT * FROM Users WHERE email = ?",
-//     //   [email]
-//     // );
-//     // if (existingUser.length > 0) {
-//     //   return res.status(409).json({ message: "Email already exists" });
-//     // }
-
-//     ///////////////////////
-
-//     // const [existingUser] = await db.query(
-//     //   "SELECT * FROM Users WHERE email = ?",
-//     //   [email]
-//     // );
-
-//     //////////////////
-
-//     const [rows] = await db.query(
-//       "INSERT INTO Users (username, email, password) VALUES (?, ?, ?)",
-//       [username, email, hashedPassword]
-//     );
-//     const createdUserId = rows.insertId; // Get the ID of the newly created user
-
-//     res.json({ message: "User created successfully!", userId: createdUserId });
-
-//     // if (existingUser) {
-//     //   return res.status(409).json({ message: "Email already exists" });
-//     // } else {
-//     //   const [rows] = await db.query(
-//     //     "INSERT INTO Users (username, email, password) VALUES (?, ?, ?)",
-//     //     [username, email, hashedPassword]
-//     //   );
-//     //   const createdUserId = rows.insertId; // Get the ID of the newly created user
-//     //   res.json({
-//     //     message: "User created successfully!",
-//     //     userId: createdUserId,
-//     //   });
-//     // }
-//   } catch (error) {
-//     console.error(error);
-//     res.status(500).json({ message: "Error creating user" });
-//   }
-// });
-
+////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Start the server
 app.listen(port, () => {
   console.log(`Server listening on port ${port}`);
