@@ -273,6 +273,192 @@ app.delete(
   }
 );
 
+app.get("/api/posts/:postId/comments", async (req, res) => {
+  try {
+    const postId = parseInt(req.params.postId);
+
+    if (!postId) {
+      return res
+        .status(400)
+        .json({ message: "Missing required field: postId" });
+    }
+
+    // Join comments and users table to get user details
+    const [rows] = await pool.query(
+      `SELECT c.content,  c.timestamp, c.user_id
+       FROM Comments c
+       INNER JOIN Users u ON c.user_id = u.user_id
+       WHERE c.post_id = ?`,
+      [postId]
+    );
+
+    const comments = rows.map((row) => ({
+      content: row.content,
+      timestamp: row.timestamp,
+      user_id: row.user_id,
+    }));
+
+    res.json({ message: "Successfully retrieved comments", comments });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error retrieving comments" });
+  }
+});
+
+app.get("/api/posts/:postId/comments/count", async (req, res) => {
+  try {
+    const postId = parseInt(req.params.postId);
+
+    if (!postId) {
+      return res
+        .status(400)
+        .json({ message: "Missing required field: postId" });
+    }
+
+    // Count comments for the post
+    const [rows] = await pool.query(
+      "SELECT COUNT(*) AS comment_count FROM Comments WHERE post_id = ?",
+      [postId]
+    );
+    const commentCount = rows[0].comment_count;
+
+    res.json({ message: "Successfully retrieved comment count", commentCount });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error retrieving comment count" });
+  }
+});
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+app.post("/api/posts/:postId/like", verifyJWT, async (req, res) => {
+  try {
+    const postId = parseInt(req.params.postId);
+    const userId = req.user.userId; // Extract from JWT
+
+    if (!postId || !userId) {
+      return res
+        .status(400)
+        .json({ message: "Missing required fields: postId or userId" });
+    }
+
+    // Check if post exists
+    const [postExists] = await pool.query(
+      "SELECT * FROM Posts WHERE post_id = ?",
+      [postId]
+    );
+    if (postExists.length === 0) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+
+    // Check if user already liked the post
+    const [existingLike] = await pool.query(
+      "SELECT * FROM Likes WHERE post_id = ? AND user_id = ?",
+      [postId, userId]
+    );
+
+    if (existingLike.length > 0) {
+      return res.status(400).json({ message: "You already liked this post" });
+    }
+
+    // Insert like into database
+    await pool.query("INSERT INTO Likes (post_id, user_id) VALUES (?, ?)", [
+      postId,
+      userId,
+    ]);
+
+    res.json({ message: "Post liked successfully" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error liking post" });
+  }
+});
+
+// Unlike a post (requires valid JWT)
+app.delete("/api/posts/:postId/like", verifyJWT, async (req, res) => {
+  try {
+    const postId = parseInt(req.params.postId);
+    const userId = req.user.userId; // Extract from JWT
+
+    if (!postId || !userId) {
+      return res
+        .status(400)
+        .json({ message: "Missing required fields: postId or userId" });
+    }
+
+    // Check if user previously liked the post
+    const [existingLike] = await pool.query(
+      "SELECT * FROM Likes WHERE post_id = ? AND user_id = ?",
+      [postId, userId]
+    );
+
+    if (existingLike.length === 0) {
+      return res
+        .status(400)
+        .json({ message: "You haven't liked this post yet" });
+    }
+
+    // Delete like from database
+    await pool.query("DELETE FROM Likes WHERE post_id = ? AND user_id = ?", [
+      postId,
+      userId,
+    ]);
+
+    res.json({ message: "Post unliked successfully" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error unliking post" });
+  }
+});
+// Get number of likes for a post
+app.get("/api/posts/:postId/likes", async (req, res) => {
+  try {
+    const postId = parseInt(req.params.postId);
+
+    if (!postId) {
+      return res
+        .status(400)
+        .json({ message: "Missing required field: postId" });
+    }
+
+    // Count likes for the post
+    const [rows] = await pool.query(
+      "SELECT COUNT(*) AS like_count FROM Likes WHERE post_id = ?",
+      [postId]
+    );
+    const likeCount = rows[0].like_count;
+
+    res.json({ message: "Successfully retrieved like count", likeCount });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error retrieving like count" });
+  }
+});
+
+// Get all user IDs who liked a post
+app.get("/api/posts/:postId/likes/users", async (req, res) => {
+  try {
+    const postId = parseInt(req.params.postId);
+
+    if (!postId) {
+      return res
+        .status(400)
+        .json({ message: "Missing required field: postId" });
+    }
+
+    // Get user IDs who liked the post
+    const [rows] = await pool.query(
+      "SELECT user_id FROM Likes WHERE post_id = ?",
+      [postId]
+    );
+    const userIds = rows.map((row) => row.user_id);
+
+    res.json({ message: "Successfully retrieved user IDs", userIds });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error retrieving user IDs" });
+  }
+});
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Start the server
 app.listen(port, () => {
