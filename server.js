@@ -152,9 +152,65 @@ app.post("/api/posts", verifyJWT, async (req, res) => {
   }
 });
 
+app.get("/api/posts/popular", async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      "SELECT * FROM Posts ORDER BY timestamp DESC"
+    );
+    res.json({ posts: rows });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error retrieving posts" });
+  }
+});
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // Protected route for adding categories (requires valid JWT, optional)
+app.post("/api/categories", verifyJWT, async (req, res) => {
+  // console.log("name", name);
+
+  try {
+    const { name } = req.body; // Extract category name
+    // Validate required field
+    if (!name) {
+      return res.status(400).json({ message: "Missing required field: name" });
+    }
+
+    // Check for duplicate category using prepared statement
+    const [existingCategory] = await pool.query(
+      "SELECT * FROM Categories WHERE name = ?",
+      [name]
+    );
+
+    if (existingCategory.length > 0) {
+      return res.status(409).json({ message: "Category already exists" });
+    }
+
+    // Insert category into database
+    const [rows] = await pool.query(
+      "INSERT INTO Categories (name) VALUES (?)",
+      [name]
+    );
+    const categoryId = rows.insertId;
+
+    res.json({ message: "Category created successfully!", categoryId });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error creating category" });
+  }
+});
+
+app.get("/api/categories", async (req, res) => {
+  try {
+    const [rows] = await pool.query("SELECT name FROM Categories");
+
+    const categoryNames = rows.map((category) => category.name);
+    res.json({ categoryNames });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error retrieving category names" });
+  }
+});
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Start the server
