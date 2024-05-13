@@ -94,7 +94,7 @@ app.post("/api/users/signin", async (req, res) => {
     }
     const payload = { userId: user.user_id }; // JWT payload with user ID
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "1h" }); // Set JWT expiration time
-    res.json({ message: "Sign in successful!", token });
+    res.json({ message: "Sign in successful!", token, userId: user.user_id });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Error signing in" });
@@ -211,6 +211,67 @@ app.get("/api/categories", async (req, res) => {
     res.status(500).json({ message: "Error retrieving category names" });
   }
 });
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+app.post("/api/posts/:postId/comments", verifyJWT, async (req, res) => {
+  try {
+    const postId = parseInt(req.params.postId); // Extract post ID from URL parameter
+    const { content } = req.body; // Extract comment content
+    if (!postId || !content) {
+      return res
+        .status(400)
+        .json({ message: "Missing required fields: postId or content" });
+    }
+    const [postExists] = await pool.query(
+      "SELECT * FROM Posts WHERE post_id = ?",
+      [postId]
+    );
+    if (postExists.length === 0) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+    const [rows] = await pool.query(
+      "INSERT INTO Comments (post_id, user_id, content) VALUES (?, ?, ?)",
+      [postId, req.user.userId, content] // Use user ID from JWT
+    );
+    const commentId = rows.insertId;
+    res.json({ message: "Comment created successfully!", commentId });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error creating comment" });
+  }
+});
+
+app.delete(
+  "/api/posts/:postId/comments/:commentId",
+  verifyJWT,
+  async (req, res) => {
+    try {
+      const postId = parseInt(req.params.postId); // Extract post ID from URL parameter
+      const commentId = parseInt(req.params.commentId); // Extract comment ID from URL parameter
+
+      if (!postId || !commentId) {
+        return res
+          .status(400)
+          .json({ message: "Missing required fields: postId or commentId" });
+      }
+      const [comment] = await pool.query(
+        "SELECT * FROM Comments WHERE comment_id = ? AND post_id = ?",
+        [commentId, postId]
+      );
+      if (comment.length === 0 || comment[0].user_id !== req.user.userId) {
+        return res
+          .status(404)
+          .json({ message: "Comment not found or unauthorized deletion" });
+      }
+      await pool.query("DELETE FROM Comments WHERE comment_id = ?", [
+        commentId,
+      ]);
+      res.json({ message: "Comment deleted successfully" });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: "Error deleting comment" });
+    }
+  }
+);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Start the server
