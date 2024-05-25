@@ -4,7 +4,8 @@ const mysql = require("mysql2/promise");
 const cors = require("cors");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
-
+const moment = require("moment"); // Assuming you're using moment.js for date formatting
+const pool = require("./database/db");
 // Create a JSON Web Token
 const payload = { userId: 123 };
 const secretKey = "your_secret_key"; // Replace with your own secret key
@@ -28,90 +29,53 @@ const JWT_SECRET = "05677015161718";
 //   database: "takkeh",
 // });
 
-const dbConfig = {
-  host: "localhost",
-  user: "root",
-  password: "root123",
-  database: "takkeh",
-};
+// const dbConfig = {
+//   host: "localhost",
+//   user: "root",
+//   password: "root123",
+//   database: "takkeh",
+// };
 
-const pool = mysql.createPool(dbConfig);
+// const pool = mysql.createPool(dbConfig);
+// module.exports = pool;
 
 ///////////////////////////
-app.post("/api/users/signup", async (req, res) => {
-  try {
-    const { username, email, password } = req.body; // Extract user data
-    console.log("username, email, password", username, email, password);
-    // Check for required fields
-    if (!username || !email || !password) {
-      return res.status(400).json({ message: "Missing required fields" });
-    }
 
-    // Validate email format (optional)
+const userControllers = require("./controllers/userControllers");
+const shopControllers = require("./controllers/shopControllers");
+const systemControllers = require("./controllers/systemControllers");
 
-    // Hash password before storing
-    const hashedPassword = await bcrypt.hash(password, 10); // Adjust cost factor as needed
-
-    // Check for existing user with email (improve error handling)
-    const [existingUser] = await pool.query(
-      "SELECT * FROM Users WHERE email = ?",
-      [email]
-    );
-    if (existingUser.length > 0) {
-      return res.status(409).json({ message: "Email already exists" });
-    }
-
-    const [rows] = await pool.query(
-      "INSERT INTO Users (username, email, password) VALUES (?, ?, ?)",
-      [username, email, hashedPassword]
-    );
-    const createdUserId = rows.insertId; // Get the ID of the newly created user
-
-    res.json({ message: "User created successfully!", userId: createdUserId });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Error creating user" });
-  }
-});
-
-// API route for user sign-in (with JWT generation)
-app.post("/api/users/signin", async (req, res) => {
-  try {
-    const { email, password } = req.body; // Extract credentials
-    if (!email || !password) {
-      return res.status(400).json({ message: "Missing required fields" });
-    }
-    const [rows] = await pool.query("SELECT * FROM Users WHERE email = ?", [
-      email,
-    ]);
-    const user = rows[0]; // Assuming only one user with the email exists
-    if (!user) {
-      return res.status(401).json({ message: "Invalid credentials" });
-    }
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) {
-      return res.status(401).json({ message: "Invalid credentials" });
-    }
-    const payload = { userId: user.user_id }; // JWT payload with user ID
-    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "1h" }); // Set JWT expiration time
-    res.json({ message: "Sign in successful!", token, userId: user.user_id });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Error signing in" });
-  }
-});
+app.post("/api/users/signup", userControllers.signUpUser);
+app.post("/api/users/signin", userControllers.signInUser);
+app.get("/api/posts/popular", userControllers.getPopularPost);
 
 const verifyJWT = (req, res, next) => {
   const authHeader = req.headers.authorization;
-
   console.log("req.headers.authorization;", req.headers.authorization);
   // Check if authorization header is present and formatted correctly
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return res.status(401).json({ message: "Unauthorized" });
   }
-
   const token = authHeader.split(" ")[1]; // Extract token from Bearer header
+  // Verify JWT and extract user data
+  jwt.verify(token, JWT_SECRET, (err, decoded) => {
+    if (err) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    // Attach decoded user data (user ID) to the request object
+    req.user = decoded;
+    next(); // Proceed with the request if JWT is valid
+  });
+};
 
+const verifyJWTShop = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  console.log("req.headers.authorization;", req.headers.authorization);
+  // Check if authorization header is present and formatted correctly
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+  const token = authHeader.split(" ")[1]; // Extract token from Bearer header
   // Verify JWT and extract user data
   jwt.verify(token, JWT_SECRET, (err, decoded) => {
     if (err) {
@@ -119,346 +83,100 @@ const verifyJWT = (req, res, next) => {
     }
 
     // Attach decoded user data (user ID) to the request object
-    req.user = decoded;
+    req.shop = decoded;
     next(); // Proceed with the request if JWT is valid
   });
 };
+
 ///////////////////////////
-
-app.post("/api/posts", verifyJWT, async (req, res) => {
-  try {
-    const { content, title } = req.body;
-
-    if (!content || !title) {
-      return res
-        .status(400)
-        .json({ message: "Missing required fields: content and title" });
-    }
-
-    const [rows] = await pool.query(
-      "INSERT INTO Posts (user_id, content, title) VALUES (?, ?, ?)",
-      [req.user.userId, content, title]
-    );
-    const postId = rows.insertId;
-
-    res.json({
-      message: "Post created successfully!",
-      postId,
-      ID: req.user.userId,
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Error creating post" });
-  }
-});
-
-app.get("/api/posts/popular", async (req, res) => {
-  try {
-    const [rows] = await pool.query(
-      "SELECT * FROM Posts ORDER BY timestamp DESC"
-    );
-    res.json({ posts: rows });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Error retrieving posts" });
-  }
-});
-////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-// Protected route for adding categories (requires valid JWT, optional)
-app.post("/api/categories", verifyJWT, async (req, res) => {
-  // console.log("name", name);
-
-  try {
-    const { name } = req.body; // Extract category name
-    // Validate required field
-    if (!name) {
-      return res.status(400).json({ message: "Missing required field: name" });
-    }
-
-    // Check for duplicate category using prepared statement
-    const [existingCategory] = await pool.query(
-      "SELECT * FROM Categories WHERE name = ?",
-      [name]
-    );
-
-    if (existingCategory.length > 0) {
-      return res.status(409).json({ message: "Category already exists" });
-    }
-
-    // Insert category into database
-    const [rows] = await pool.query(
-      "INSERT INTO Categories (name) VALUES (?)",
-      [name]
-    );
-    const categoryId = rows.insertId;
-
-    res.json({ message: "Category created successfully!", categoryId });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Error creating category" });
-  }
-});
-
-app.get("/api/categories", async (req, res) => {
-  try {
-    const [rows] = await pool.query("SELECT name FROM Categories");
-
-    const categoryNames = rows.map((category) => category.name);
-    res.json({ categoryNames });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Error retrieving category names" });
-  }
-});
+//add new posts
+app.post("/api/posts", verifyJWTShop, shopControllers.addNewPost);
+app.post("/api/categories", verifyJWTShop, shopControllers.addNewCategory);
+app.get("/api/categories", systemControllers.getAllCategories);
 //////////////////////////////////////////////////////////////////////////////////////////////////////
-app.post("/api/posts/:postId/comments", verifyJWT, async (req, res) => {
-  try {
-    const postId = parseInt(req.params.postId); // Extract post ID from URL parameter
-    const { content } = req.body; // Extract comment content
-    if (!postId || !content) {
-      return res
-        .status(400)
-        .json({ message: "Missing required fields: postId or content" });
-    }
-    const [postExists] = await pool.query(
-      "SELECT * FROM Posts WHERE post_id = ?",
-      [postId]
-    );
-    if (postExists.length === 0) {
-      return res.status(404).json({ message: "Post not found" });
-    }
-    const [rows] = await pool.query(
-      "INSERT INTO Comments (post_id, user_id, content) VALUES (?, ?, ?)",
-      [postId, req.user.userId, content] // Use user ID from JWT
-    );
-    const commentId = rows.insertId;
-    res.json({ message: "Comment created successfully!", commentId });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Error creating comment" });
-  }
-});
+app.post("/api/posts/:postId/comments", verifyJWT, userControllers.addComment);
 
 app.delete(
   "/api/posts/:postId/comments/:commentId",
   verifyJWT,
-  async (req, res) => {
-    try {
-      const postId = parseInt(req.params.postId); // Extract post ID from URL parameter
-      const commentId = parseInt(req.params.commentId); // Extract comment ID from URL parameter
-
-      if (!postId || !commentId) {
-        return res
-          .status(400)
-          .json({ message: "Missing required fields: postId or commentId" });
-      }
-      const [comment] = await pool.query(
-        "SELECT * FROM Comments WHERE comment_id = ? AND post_id = ?",
-        [commentId, postId]
-      );
-      if (comment.length === 0 || comment[0].user_id !== req.user.userId) {
-        return res
-          .status(404)
-          .json({ message: "Comment not found or unauthorized deletion" });
-      }
-      await pool.query("DELETE FROM Comments WHERE comment_id = ?", [
-        commentId,
-      ]);
-      res.json({ message: "Comment deleted successfully" });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ message: "Error deleting comment" });
-    }
-  }
+  userControllers.deleteComment
 );
 
-app.get("/api/posts/:postId/comments", async (req, res) => {
-  try {
-    const postId = parseInt(req.params.postId);
+app.get("/api/posts/:postId/comments", systemControllers.getAllCommentForPost);
 
-    if (!postId) {
-      return res
-        .status(400)
-        .json({ message: "Missing required field: postId" });
-    }
-
-    // Join comments and users table to get user details
-    const [rows] = await pool.query(
-      `SELECT c.content,  c.timestamp, c.user_id
-       FROM Comments c
-       INNER JOIN Users u ON c.user_id = u.user_id
-       WHERE c.post_id = ?`,
-      [postId]
-    );
-
-    const comments = rows.map((row) => ({
-      content: row.content,
-      timestamp: row.timestamp,
-      user_id: row.user_id,
-    }));
-
-    res.json({ message: "Successfully retrieved comments", comments });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Error retrieving comments" });
-  }
-});
-
-app.get("/api/posts/:postId/comments/count", async (req, res) => {
-  try {
-    const postId = parseInt(req.params.postId);
-
-    if (!postId) {
-      return res
-        .status(400)
-        .json({ message: "Missing required field: postId" });
-    }
-
-    // Count comments for the post
-    const [rows] = await pool.query(
-      "SELECT COUNT(*) AS comment_count FROM Comments WHERE post_id = ?",
-      [postId]
-    );
-    const commentCount = rows[0].comment_count;
-
-    res.json({ message: "Successfully retrieved comment count", commentCount });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Error retrieving comment count" });
-  }
-});
+app.get(
+  "/api/posts/:postId/comments/count",
+  systemControllers.getNumCommentForPost
+);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-app.post("/api/posts/:postId/like", verifyJWT, async (req, res) => {
+app.post("/api/posts/:postId/like", verifyJWT, userControllers.addLike);
+app.delete("/api/posts/:postId/like", verifyJWT, userControllers.deleteLike);
+
+app.get("/api/posts/:postId/likes", systemControllers.getNumLikeForPost);
+
+app.get("/api/posts/:postId/likes/users", systemControllers.getUsersWhoPutLike);
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////
+// shop table
+app.post("/api/shops/:shopId/follow", verifyJWT, userControllers.followShop);
+
+app.post(
+  "/api/shops/:shopId/unfollow",
+  verifyJWT,
+  userControllers.unfollowShop
+);
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+app.post("/api/shops/signup", shopControllers.signupShop);
+
+app.post("/api/shops/signin", shopControllers.signInShop);
+
+app.get("/api/shops", systemControllers.getAllShop);
+
+app.get(
+  "/api/shops/:shopId/numberfollowers",
+  systemControllers.numberFollowersForShop
+);
+
+/// get all users which is follow page
+app.get("/api/shops/:shopId/followers", async (req, res) => {
   try {
-    const postId = parseInt(req.params.postId);
-    const userId = req.user.userId; // Extract from JWT
+    const shopId = parseInt(req.params.shopId); // Extract shop ID from URL parameter
 
-    if (!postId || !userId) {
-      return res
-        .status(400)
-        .json({ message: "Missing required fields: postId or userId" });
-    }
-
-    // Check if post exists
-    const [postExists] = await pool.query(
-      "SELECT * FROM Posts WHERE post_id = ?",
-      [postId]
-    );
-    if (postExists.length === 0) {
-      return res.status(404).json({ message: "Post not found" });
-    }
-
-    // Check if user already liked the post
-    const [existingLike] = await pool.query(
-      "SELECT * FROM Likes WHERE post_id = ? AND user_id = ?",
-      [postId, userId]
-    );
-
-    if (existingLike.length > 0) {
-      return res.status(400).json({ message: "You already liked this post" });
-    }
-
-    // Insert like into database
-    await pool.query("INSERT INTO Likes (post_id, user_id) VALUES (?, ?)", [
-      postId,
-      userId,
-    ]);
-
-    res.json({ message: "Post liked successfully" });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Error liking post" });
-  }
-});
-
-// Unlike a post (requires valid JWT)
-app.delete("/api/posts/:postId/like", verifyJWT, async (req, res) => {
-  try {
-    const postId = parseInt(req.params.postId);
-    const userId = req.user.userId; // Extract from JWT
-
-    if (!postId || !userId) {
-      return res
-        .status(400)
-        .json({ message: "Missing required fields: postId or userId" });
-    }
-
-    // Check if user previously liked the post
-    const [existingLike] = await pool.query(
-      "SELECT * FROM Likes WHERE post_id = ? AND user_id = ?",
-      [postId, userId]
-    );
-
-    if (existingLike.length === 0) {
-      return res
-        .status(400)
-        .json({ message: "You haven't liked this post yet" });
-    }
-
-    // Delete like from database
-    await pool.query("DELETE FROM Likes WHERE post_id = ? AND user_id = ?", [
-      postId,
-      userId,
-    ]);
-
-    res.json({ message: "Post unliked successfully" });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Error unliking post" });
-  }
-});
-// Get number of likes for a post
-app.get("/api/posts/:postId/likes", async (req, res) => {
-  try {
-    const postId = parseInt(req.params.postId);
-
-    if (!postId) {
-      return res
-        .status(400)
-        .json({ message: "Missing required field: postId" });
-    }
-
-    // Count likes for the post
     const [rows] = await pool.query(
-      "SELECT COUNT(*) AS like_count FROM Likes WHERE post_id = ?",
-      [postId]
+      `SELECT u.user_id, u.username,photo_url
+       FROM Users u
+       INNER JOIN UserShopFollows usf ON u.user_id = usf.user_id
+       WHERE usf.shop_id = ?`,
+      [shopId]
     );
-    const likeCount = rows[0].like_count;
+    console.log("rows", rows);
 
-    res.json({ message: "Successfully retrieved like count", likeCount });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Error retrieving like count" });
-  }
-});
+    console.log(
+      "rows0-----------------------------------------------------------------------"
+    );
 
-// Get all user IDs who liked a post
-app.get("/api/posts/:postId/likes/users", async (req, res) => {
-  try {
-    const postId = parseInt(req.params.postId);
-
-    if (!postId) {
+    if (rows.length === 0) {
       return res
-        .status(400)
-        .json({ message: "Missing required field: postId" });
+        .status(404)
+        .json({ message: "Shop not found or has no followers" });
     }
 
-    // Get user IDs who liked the post
-    const [rows] = await pool.query(
-      "SELECT user_id FROM Likes WHERE post_id = ?",
-      [postId]
-    );
-    const userIds = rows.map((row) => row.user_id);
+    const followers = rows.map((row) => ({
+      userId: row.user_id,
+      username: row.username,
+    }));
 
-    res.json({ message: "Successfully retrieved user IDs", userIds });
+    res.json({ followers });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "Error retrieving user IDs" });
+    res.status(500).json({ message: "Error fetching followers" });
   }
 });
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Start the server
 app.listen(port, () => {
