@@ -1,27 +1,28 @@
 const bcrypt = require("bcrypt");
 const pool = require("../database/db");
+const jwt = require("jsonwebtoken");
+const JWT_SECRET = "05677015161718";
 
 const signUpUser = async (req, res) => {
   try {
-    const { username, password, phone } = req.body; // Extract user data
-    console.log("username, password", username, phone, password);
+    const { username, password, phone, city, address, photo_url } = req.body;
+    console.log("username, password", username, phone, password, city, address);
     if (!username || !password || !phone) {
       return res.status(400).json({ message: "Missing required fields" });
     }
-    const hashedPassword = await bcrypt.hash(password, 10); // Adjust cost factor as needed
+    const hashedPassword = await bcrypt.hash(password, 10);
     const [existingUser] = await pool.query(
       "SELECT * FROM Users WHERE phone = ?",
       [phone]
     );
     if (existingUser.length > 0) {
-      return res.status(409).json({ message: "Email already exists" });
+      return res.status(409).json({ message: "This phone already exists" });
     }
     const [rows] = await pool.query(
-      "INSERT INTO Users (username,phone , password) VALUES (?, ?, ?)",
-      [username, phone, hashedPassword]
+      "INSERT INTO Users (username,phone , password,city,address,photo_url) VALUES (?, ?, ?,?,?,?)",
+      [username, phone, hashedPassword, city, address, photo_url]
     );
-    const createdUserId = rows.insertId; // Get the ID of the newly created user
-
+    const createdUserId = rows.insertId;
     res.json({ message: "User created successfully!", userId: createdUserId });
   } catch (error) {
     console.error(error);
@@ -31,14 +32,14 @@ const signUpUser = async (req, res) => {
 
 const signInUser = async (req, res) => {
   try {
-    const { phone, password } = req.body; // Extract credentials
+    const { phone, password } = req.body;
     if (!phone || !password) {
       return res.status(400).json({ message: "Missing required fields" });
     }
     const [rows] = await pool.query("SELECT * FROM Users WHERE phone = ?", [
       phone,
     ]);
-    const user = rows[0]; // Assuming only one user with the email exists
+    const user = rows[0];
     if (!user) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
@@ -242,6 +243,17 @@ const unfollowShop = async (req, res) => {
     const { userId } = req.user; // Get user ID from JWT
     const shopId = parseInt(req.params.shopId); // Extract shop ID from URL parameter
 
+    const [rows] = await pool.query(
+      "SELECT * FROM UserShopFollows WHERE user_id = ? AND shop_id = ?",
+      [userId, shopId]
+    );
+    console.log("row", rows);
+    if (rows.length >= 0) {
+      return res
+        .status(400)
+        .json({ message: "User already unfollows this shop" });
+    }
+
     // Delete follow record
     await pool.query(
       "DELETE FROM UserShopFollows WHERE user_id = ? AND shop_id = ?",
@@ -261,6 +273,83 @@ const unfollowShop = async (req, res) => {
   }
 };
 
+const updateUserAddress = async (req, res) => {
+  try {
+    const { user_id, address, city } = req.body; // Extract user ID, address, and city
+
+    // Validate user ID (optional, add checks as needed)
+    if (!Number.isInteger(user_id)) {
+      return res.status(400).json({ message: "Invalid user_id" });
+    }
+
+    // Validate address and city (optional, adjust as needed)
+    if (!address || !city) {
+      return res
+        .status(400)
+        .json({ message: "Missing required fields: address or city" });
+    }
+
+    // Check if user exists (optional, based on your requirements)
+    const [existingUser] = await pool.query(
+      "SELECT * FROM Users WHERE user_id = ?",
+      [user_id]
+    );
+    if (!existingUser.length) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const [rows] = await pool.execute(
+      "UPDATE Users SET address = ?, city = ? WHERE user_id = ?",
+      [address, city, user_id]
+    );
+
+    if (rows.affectedRows > 0) {
+      return res.status(200).json({ message: "Address updated successfully" });
+    } else {
+      return res.status(400).json({ message: "No changes made" }); // Or other appropriate message
+    }
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+const updateUserInformation = async (req, res) => {
+  try {
+    const userId = parseInt(req.user.userId); // Extract user ID from parameters
+
+    // Validate user ID (adjust as needed)
+    if (isNaN(userId)) {
+      return res.status(400).json({ message: "Invalid user ID format" });
+    }
+
+    const { username, email, phone } = req.body;
+
+    // Validate and sanitize user input (consider libraries like validator.js)
+    // ... (validation and sanitization logic)
+
+    // Build update query using prepared statement (recommended for security)
+    const updateQuery = `UPDATE users
+                         SET username = ?,
+                             email = ?,
+                             phone = ?
+                         WHERE user_id = ?`;
+    const updateParams = [username, email, phone, userId];
+
+    // Execute update using prepared statement
+    const [result] = await pool.execute(updateQuery, updateParams);
+
+    if (result.affectedRows > 0) {
+      res.json({ message: "User information updated successfully" });
+    } else {
+      res.status(400).json({ message: "No changes made or user not found" }); // Or other appropriate message
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
 module.exports = {
   signUpUser,
   signInUser,
@@ -271,4 +360,6 @@ module.exports = {
   deleteLike,
   followShop,
   unfollowShop,
+  updateUserAddress,
+  updateUserInformation,
 };

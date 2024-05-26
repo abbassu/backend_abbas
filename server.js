@@ -93,6 +93,10 @@ const verifyJWTShop = (req, res, next) => {
 app.post("/api/posts", verifyJWTShop, shopControllers.addNewPost);
 app.post("/api/categories", verifyJWTShop, shopControllers.addNewCategory);
 app.get("/api/categories", systemControllers.getAllCategories);
+app.put("/api/shops/update", verifyJWTShop, shopControllers.updateShopInfo);
+
+app.put("/api/user/update", verifyJWT, userControllers.updateUserInformation);
+
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 app.post("/api/posts/:postId/comments", verifyJWT, userControllers.addComment);
 
@@ -100,6 +104,12 @@ app.delete(
   "/api/posts/:postId/comments/:commentId",
   verifyJWT,
   userControllers.deleteComment
+);
+
+app.patch(
+  "/api/users/updateUserAddress",
+  verifyJWT,
+  userControllers.updateUserAddress
 );
 
 app.get("/api/posts/:postId/comments", systemControllers.getAllCommentForPost);
@@ -147,7 +157,7 @@ app.get("/api/shops/:shopId/followers", async (req, res) => {
     const shopId = parseInt(req.params.shopId); // Extract shop ID from URL parameter
 
     const [rows] = await pool.query(
-      `SELECT u.user_id, u.username,photo_url
+      `SELECT u.user_id, u.username,u.photo_url
        FROM Users u
        INNER JOIN UserShopFollows usf ON u.user_id = usf.user_id
        WHERE usf.shop_id = ?`,
@@ -168,6 +178,7 @@ app.get("/api/shops/:shopId/followers", async (req, res) => {
     const followers = rows.map((row) => ({
       userId: row.user_id,
       username: row.username,
+      photo_url: row.photo_url,
     }));
 
     res.json({ followers });

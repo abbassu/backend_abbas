@@ -1,6 +1,7 @@
 const bcrypt = require("bcrypt");
 const pool = require("../database/db");
-
+const jwt = require("jsonwebtoken");
+const JWT_SECRET = "05677015161718";
 const addNewPost = async (req, res) => {
   try {
     const { content, title, URL_photo, categoryId } = req.body; // Include URL_photo in request body
@@ -161,9 +162,64 @@ const signInShop = async (req, res) => {
   }
 };
 
+const updateShopInfo = async (req, res) => {
+  try {
+    const shopId = parseInt(req.shop.shopId); // Extract shop ID from parameters
+    console.log("req.shop.shop_id", req.shop.shopId);
+    // Validate shopID (adjust as needed)
+    if (isNaN(shopId)) {
+      return res.status(400).json({ message: "Invalid shop ID format" });
+    }
+
+    const {
+      shopName,
+      description,
+      location,
+      phoneNumber,
+      photoUrl,
+      backgroundPhotoUrl,
+    } = req.body;
+
+    // Validate and sanitize user input (consider libraries like validator.js)
+    // ... (validation and sanitization logic)
+
+    // Build update query with optional parameters
+    const updateQuery = `UPDATE shop
+                         SET shop_name = ?,
+                             description = ?,
+                             location = ?,
+                             phone_number = ?,
+                             photo_url = ?,
+                             background_photo_url = ?
+                         WHERE shop_id = ?`;
+    const updateParams = [
+      shopName,
+      description,
+      location,
+      phoneNumber,
+      photoUrl,
+      backgroundPhotoUrl,
+      shopId,
+    ];
+
+    // Execute update using prepared statement (recommended for security)
+    const [result] = await pool.execute(updateQuery, updateParams);
+
+    if (result.affectedRows > 0) {
+      res.json({ message: "Shop information updated successfully" });
+    } else {
+      res.status(400).json({ message: "No changes made or shop not found" }); // Or other appropriate message
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
 module.exports = {
   addNewPost,
   addNewCategory,
   signupShop,
   signInShop,
+  updateShopInfo,
 };

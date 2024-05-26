@@ -1,5 +1,6 @@
 const bcrypt = require("bcrypt");
 const pool = require("../database/db");
+const moment = require("moment"); // Assuming you're using moment.js for date formatting
 
 const getAllCategories = async (req, res) => {
   try {
@@ -24,12 +25,13 @@ const getAllCommentForPost = async (req, res) => {
     }
     // Join comments and users table to get user details
     const [rows] = await pool.query(
-      `SELECT c.content, c.timestamp, c.user_id
+      `SELECT c.content, c.timestamp, c.user_id, u.username, u.photo_url
        FROM Comments c
        INNER JOIN Users u ON c.user_id = u.user_id
        WHERE c.post_id = ?`,
       [postId]
     );
+    console.log("roiq", rows);
 
     const comments = rows.map((row) => {
       // Extract timestamp components
@@ -40,6 +42,9 @@ const getAllCommentForPost = async (req, res) => {
       const formattedDate = moment(row.timestamp).format("YYYY-MM-DD"); // Format date
 
       return {
+        username: row.username,
+        photo_url: row.photo_url,
+        user_id: row.user_id,
         content: row.content,
         timestamp: [
           // formattedHours,
@@ -49,7 +54,6 @@ const getAllCommentForPost = async (req, res) => {
           formattedDate,
           `${formattedHours}:${formattedMinutes}:${formattedSeconds}`, // Include formatted time
         ],
-        user_id: row.user_id,
       };
     });
 
@@ -120,9 +124,10 @@ const getUsersWhoPutLike = async (req, res) => {
 
     // Get user details who liked the post
     const [users] = await pool.query(
-      `SELECT u.user_id, u.username, u.photo_url 
+      `SELECT u.user_id, u.username,u.photo_url
        FROM Likes l
-       JOIN users u Where l.user_id = u.user_id`,
+       INNER JOIN Users u ON l.user_id = u.user_id
+       WHERE l.post_id = ?`,
       [postId]
     );
 
