@@ -159,12 +159,20 @@ app.put(
 app.get("/api/menus/:menuId/meal", menuControllers.getAllMealsForMenu);
 
 app.get("/api/shop/:shopId/menus", menuControllers.getAllMenusForShop);
-app.get("/api/shop/orderstatus", shopControllers.updateOrderStatus);
+app.patch("/api/shop/orderstatus", shopControllers.updateOrderStatus);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 app.post("/api/driver/signup", driverControllers.signupDriver);
 app.post("/api/driver/signin", driverControllers.signinDriver);
+app.post("/api/system/addpromo", systemControllers.addPromocode);
+
+app.get("/api/orders/:shop_id", shopControllers.getAllOrder);
+
+app.get("/api/classification", systemControllers.getAllClassification);
+
+app.post("/api/user/favorite", userControllers.makeFavorite);
+app.get("/api/user/favorite", userControllers.getAllShopFavorite);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 

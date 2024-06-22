@@ -166,6 +166,45 @@ const numberFollowersForShop = async (req, res) => {
   }
 };
 
+const addPromocode = async (req, res) => {
+  try {
+    const { name, percent } = req.body;
+
+    // Basic validation
+    if (!name || !percent || typeof percent !== "number") {
+      return res.status(400).json({ message: "Invalid request body format" });
+    }
+
+    // Insert promo code into the database
+    const [result] = await pool.query(
+      "INSERT INTO promocode (name, percent) VALUES (?, ?)",
+      [name, percent]
+    );
+
+    if (result.affectedRows > 0) {
+      res.json({
+        message: "Promo code added successfully!",
+        promoCodeId: result.insertId,
+      });
+    } else {
+      res.status(500).json({ message: "Failed to add promo code" });
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+const getAllClassification = async (req, res) => {
+  console.log("4444444444444444");
+  try {
+    const [rows] = await pool.query("SELECT * FROM classification ");
+    res.json(rows);
+  } catch (err) {
+    res.status(500).send(err);
+  }
+};
+
 module.exports = {
   getAllCategories,
   getAllCommentForPost,
@@ -174,4 +213,6 @@ module.exports = {
   getUsersWhoPutLike,
   getAllShop,
   numberFollowersForShop,
+  addPromocode,
+  getAllClassification,
 };

@@ -80,6 +80,8 @@ const signupShop = async (req, res) => {
       background_photo_url,
       open_time, // New field for opening time
       close_time, // New field for closing time
+      lon_t, // Longitude
+      lat_t, // Latitude
     } = req.body;
 
     // Basic validation (consider adding more as needed)
@@ -87,12 +89,12 @@ const signupShop = async (req, res) => {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
-    // Hash password for security (replace with your hashing method)
+    // Hash password for security
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Insert shop data
     await pool.query(
-      "INSERT INTO Shop (shop_name, description, location, email, phone_number, password_hash, photo_url, followers, background_photo_url, num_orders, open_time, close_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO Shop (shop_name, description, location, email, phone_number, password_hash, photo_url, followers, background_photo_url, num_orders, open_time, close_time, lon_t, lat_t) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       [
         shop_name,
         description,
@@ -106,6 +108,8 @@ const signupShop = async (req, res) => {
         0, // Set num_orders to 0 initially
         open_time, // New value for opening time
         close_time, // New value for closing time
+        lon_t, // Longitude
+        lat_t, // Latitude
       ]
     );
 
@@ -323,6 +327,23 @@ const updateOrderStatus = async (req, res) => {
   }
 };
 
+const getAllOrder = async (req, res) => {
+  const shopId = req.params.shop_id;
+
+  try {
+    // Execute the query to get all orders for the given shop_id
+    const [rows] = await pool.query("SELECT * FROM orders WHERE shop_id = ?", [
+      shopId,
+    ]);
+
+    // Send the result back to the client
+    res.json(rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
 module.exports = {
   addNewPost,
   addNewCategory,
@@ -332,4 +353,5 @@ module.exports = {
   getAllPostsForShop,
   getFollowersInfoForShop,
   updateOrderStatus,
+  getAllOrder,
 };

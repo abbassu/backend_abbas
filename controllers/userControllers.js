@@ -5,24 +5,66 @@ const JWT_SECRET = "05677015161718";
 
 const signUpUser = async (req, res) => {
   try {
-    const { username, password, phone, city, address, photo_url } = req.body;
-    console.log("username, password", username, phone, password, city, address);
+    const {
+      username,
+      password,
+      phone,
+      city,
+      address,
+      photo_url,
+      lat_t,
+      lon_t,
+    } = req.body;
+
+    console.log(
+      "Received sign-up request:",
+      username,
+      phone,
+      password,
+      city,
+      address,
+      lat_t,
+      lon_t
+    );
+
+    // Validate required fields
     if (!username || !password || !phone) {
       return res.status(400).json({ message: "Missing required fields" });
     }
+
+    // Hash the password
     const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Check if the user already exists
     const [existingUser] = await pool.query(
       "SELECT * FROM Users WHERE phone = ?",
       [phone]
     );
+
     if (existingUser.length > 0) {
       return res.status(409).json({ message: "This phone already exists" });
     }
+
+    // Insert new user into the database
     const [rows] = await pool.query(
-      "INSERT INTO Users (username, phone, password, city, address, photo_url, num_order, points) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-      [username, phone, hashedPassword, city, address, photo_url, 0, 0] // Add default values for num_order and points
+      `INSERT INTO Users (username, phone, password, city, address, photo_url, num_order, points, lat_t, lon_t) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        username,
+        phone,
+        hashedPassword,
+        city,
+        address,
+        photo_url,
+        0,
+        0,
+        lat_t,
+        lon_t,
+      ] // Default values for num_order and points
     );
+
     const createdUserId = rows.insertId;
+
     res.json({ message: "User created successfully!", userId: createdUserId });
   } catch (error) {
     console.error(error);
@@ -406,6 +448,11 @@ const makeOrder = async (req, res) => {
       // Update total price
       orderData.total_price += mealPrice * quantity;
     }
+    // const [userInfo] = await pool.query(
+    //   "SELECT users.user_id , users.lat_t , users.lon_t, user.address FROM users user_id = ?",
+    //   [user_id]
+    // );
+    // console.log("userinfo", userInfo);
 
     // Build insert query with prepared statement
     const insertQuery = `INSERT INTO orders (user_id, shop_id, special_instructions, created_at, total_price) VALUES (?, ?, ?, ?, ?)`;
@@ -433,6 +480,36 @@ const makeOrder = async (req, res) => {
   }
 };
 
+const makeFavorite = async (req, res) => {
+  const { user_id, shop_id } = req.body;
+  try {
+    const [results] = await pool.query(
+      "INSERT INTO favorites (user_id, shop_id) VALUES (?, ?)",
+      [user_id, shop_id]
+    );
+    res.json({ id: results.insertId, user_id, shop_id });
+  } catch (err) {
+    res.status(500).send(err);
+  }
+};
+
+const getAllShopFavorite = async (req, res) => {
+  const { user_id } = req.body; // Assuming user_id is sent in the request body
+
+  try {
+    const [favorites] = await pool.query(
+      "SELECT shop.shop_id, shop.shop_name, shop.background_photo_url, shop.photo_url, shop.lat_t, shop.lon_t,shop.classification " +
+        "FROM favorites " +
+        "JOIN shop ON favorites.shop_id = shop.shop_id " +
+        "WHERE favorites.user_id = ?",
+      [user_id]
+    );
+    res.json(favorites);
+  } catch (err) {
+    console.error("Error fetching favorite shops:", err);
+    res.status(500).send("Internal Server Error");
+  }
+};
 module.exports = {
   signUpUser,
   signInUser,
@@ -446,4 +523,6 @@ module.exports = {
   updateUserAddress,
   updateUserInformation,
   makeOrder,
+  makeFavorite,
+  getAllShopFavorite,
 };
