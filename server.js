@@ -1,51 +1,32 @@
 const express = require("express");
 const mysql = require("mysql2/promise");
-// const mysql = require("mysql");
 const cors = require("cors");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const moment = require("moment"); // Assuming you're using moment.js for date formatting
 const pool = require("./database/db");
-// Create a JSON Web Token
 const payload = { userId: 123 };
 const secretKey = "your_secret_key"; // Replace with your own secret key
-const token = jwt.sign(payload, secretKey, { expiresIn: "1h" });
+const token = jwt.sign(payload, secretKey, { expiresIn: "3h" });
 
 console.log("Generated token:", token);
 
 const app = express();
-// const port = process.env.PORT || 3200; // Use environment variable for port or default to 3000
-
 const port = 3200; // Use environment variable for port or default to 3000
 app.use(cors());
 app.use(express.json());
 
 const JWT_SECRET = "05677015161718";
-// Configure MySQL connection pool (replace with your credentials)
-// const db = mysql.createPool({
-//   host: "localhost",
-//   user: "root",
-//   password: "root123",
-//   database: "takkeh",
-// });
-
-// const dbConfig = {
-//   host: "localhost",
-//   user: "root",
-//   password: "root123",
-//   database: "takkeh",
-// };
-
-// const pool = mysql.createPool(dbConfig);
-// module.exports = pool;
-
-///////////////////////////
 
 const userControllers = require("./controllers/userControllers");
 const shopControllers = require("./controllers/shopControllers");
 const systemControllers = require("./controllers/systemControllers");
+const menuControllers = require("./controllers/menuController");
+const driverControllers = require("./controllers/driverController");
 
 app.post("/api/users/signup", userControllers.signUpUser);
+app.post("/api/users/makeorder", userControllers.makeOrder);
+
 app.post("/api/users/signin", userControllers.signInUser);
 app.get("/api/posts/popular", userControllers.getPopularPost);
 
@@ -151,44 +132,42 @@ app.get(
   systemControllers.numberFollowersForShop
 );
 
+app.get("/api/shops/:shopId/allPosts", shopControllers.getAllPostsForShop);
+
 /// get all users which is follow page
-app.get("/api/shops/:shopId/followers", async (req, res) => {
-  try {
-    const shopId = parseInt(req.params.shopId); // Extract shop ID from URL parameter
+app.get(
+  "/api/shops/:shopId/followers",
+  shopControllers.getFollowersInfoForShop
+);
 
-    const [rows] = await pool.query(
-      `SELECT u.user_id, u.username,u.photo_url
-       FROM Users u
-       INNER JOIN UserShopFollows usf ON u.user_id = usf.user_id
-       WHERE usf.shop_id = ?`,
-      [shopId]
-    );
-    console.log("rows", rows);
+app.post("/api/shops/menus", verifyJWTShop, menuControllers.addMenu);
 
-    console.log(
-      "rows0-----------------------------------------------------------------------"
-    );
+app.post("/api/shop/:menuId/meal", verifyJWTShop, menuControllers.addMeal);
 
-    if (rows.length === 0) {
-      return res
-        .status(404)
-        .json({ message: "Shop not found or has no followers" });
-    }
+app.delete(
+  "/api/shop/menus/meal/:mealId",
+  verifyJWTShop,
+  menuControllers.deleteMeal
+);
 
-    const followers = rows.map((row) => ({
-      userId: row.user_id,
-      username: row.username,
-      photo_url: row.photo_url,
-    }));
+app.put(
+  "/api/shop/menus/meal/:mealId",
+  verifyJWTShop,
+  menuControllers.updateMeal
+);
 
-    res.json({ followers });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Error fetching followers" });
-  }
-});
+app.get("/api/menus/:menuId/meal", menuControllers.getAllMealsForMenu);
+
+app.get("/api/shop/:shopId/menus", menuControllers.getAllMenusForShop);
+app.get("/api/shop/orderstatus", shopControllers.updateOrderStatus);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+app.post("/api/driver/signup", driverControllers.signupDriver);
+app.post("/api/driver/signin", driverControllers.signinDriver);
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 // Start the server
 app.listen(port, () => {
   console.log(`Server listening on port ${port}`);

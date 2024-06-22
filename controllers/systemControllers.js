@@ -5,8 +5,6 @@ const moment = require("moment"); // Assuming you're using moment.js for date fo
 const getAllCategories = async (req, res) => {
   try {
     const [rows] = await pool.query("SELECT name,category_id FROM Categories");
-
-    // const categoryNames = rows.map((category) => category.name);
     res.json({ rows });
   } catch (error) {
     console.error(error);
@@ -23,7 +21,6 @@ const getAllCommentForPost = async (req, res) => {
         .status(400)
         .json({ message: "Missing required field: postId" });
     }
-    // Join comments and users table to get user details
     const [rows] = await pool.query(
       `SELECT c.content, c.timestamp, c.user_id, u.username, u.photo_url
        FROM Comments c
@@ -34,7 +31,6 @@ const getAllCommentForPost = async (req, res) => {
     console.log("roiq", rows);
 
     const comments = rows.map((row) => {
-      // Extract timestamp components
       const timestamp = moment(row.timestamp);
       const formattedHours = timestamp.hours().toString().padStart(2, "0");
       const formattedMinutes = timestamp.minutes().toString().padStart(2, "0");
@@ -47,10 +43,6 @@ const getAllCommentForPost = async (req, res) => {
         user_id: row.user_id,
         content: row.content,
         timestamp: [
-          // formattedHours,
-          // formattedMinutes,
-          // formattedSeconds,
-          // "to calculate time",
           formattedDate,
           `${formattedHours}:${formattedMinutes}:${formattedSeconds}`, // Include formatted time
         ],
@@ -73,14 +65,11 @@ const getNumCommentForPost = async (req, res) => {
         .status(400)
         .json({ message: "Missing required field: postId" });
     }
-
-    // Count comments for the post
     const [rows] = await pool.query(
       "SELECT COUNT(*) AS comment_count FROM Comments WHERE post_id = ?",
       [postId]
     );
     const commentCount = rows[0].comment_count;
-
     res.json({ message: "Successfully retrieved comment count", commentCount });
   } catch (error) {
     console.error(error);
@@ -97,14 +86,11 @@ const getNumLikeForPost = async (req, res) => {
         .status(400)
         .json({ message: "Missing required field: postId" });
     }
-
-    // Count likes for the post
     const [rows] = await pool.query(
       "SELECT COUNT(*) AS like_count FROM Likes WHERE post_id = ?",
       [postId]
     );
     const likeCount = rows[0].like_count;
-
     res.json({ message: "Successfully retrieved like count", likeCount });
   } catch (error) {
     console.error(error);
@@ -115,14 +101,11 @@ const getNumLikeForPost = async (req, res) => {
 const getUsersWhoPutLike = async (req, res) => {
   try {
     const postId = parseInt(req.params.postId);
-
     if (!postId) {
       return res
         .status(400)
         .json({ message: "Missing required field: postId" });
     }
-
-    // Get user details who liked the post
     const [users] = await pool.query(
       `SELECT u.user_id, u.username,u.photo_url
        FROM Likes l

@@ -78,10 +78,12 @@ const signupShop = async (req, res) => {
       password,
       photo_url,
       background_photo_url,
+      open_time, // New field for opening time
+      close_time, // New field for closing time
     } = req.body;
 
     // Basic validation (consider adding more as needed)
-    if (!shop_name || !email || !password) {
+    if (!shop_name || !email || !password || !open_time || !close_time) {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
@@ -90,7 +92,7 @@ const signupShop = async (req, res) => {
 
     // Insert shop data
     await pool.query(
-      "INSERT INTO Shop (shop_name, description, location, email, phone_number, password_hash, photo_url, followers, background_photo_url, num_orders) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO Shop (shop_name, description, location, email, phone_number, password_hash, photo_url, followers, background_photo_url, num_orders, open_time, close_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       [
         shop_name,
         description,
@@ -102,6 +104,8 @@ const signupShop = async (req, res) => {
         0, // Set followers to 0 initially
         background_photo_url,
         0, // Set num_orders to 0 initially
+        open_time, // New value for opening time
+        close_time, // New value for closing time
       ]
     );
 
@@ -144,7 +148,7 @@ const signInShop = async (req, res) => {
     const isTaken = rows.length > 1; // Check if multiple shops have the same email
 
     const payload = { shopId: shop.shop_id }; // JWT payload with user ID
-    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "1h" }); // Set JWT expiration time
+    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "3h" }); // Set JWT expiration time
     // res.json({
     //   message: "Shop signed in successfully!",
     //   token,
@@ -166,6 +170,7 @@ const updateShopInfo = async (req, res) => {
   try {
     const shopId = parseInt(req.shop.shopId); // Extract shop ID from parameters
     console.log("req.shop.shop_id", req.shop.shopId);
+
     // Validate shopID (adjust as needed)
     if (isNaN(shopId)) {
       return res.status(400).json({ message: "Invalid shop ID format" });
@@ -178,6 +183,8 @@ const updateShopInfo = async (req, res) => {
       phoneNumber,
       photoUrl,
       backgroundPhotoUrl,
+      openTime, // New field for opening time
+      closeTime, // New field for closing time
     } = req.body;
 
     // Validate and sanitize user input (consider libraries like validator.js)
@@ -190,7 +197,9 @@ const updateShopInfo = async (req, res) => {
                              location = ?,
                              phone_number = ?,
                              photo_url = ?,
-                             background_photo_url = ?
+                             background_photo_url = ?,
+                             open_time = ?,
+                             close_time = ?
                          WHERE shop_id = ?`;
     const updateParams = [
       shopName,
@@ -199,6 +208,8 @@ const updateShopInfo = async (req, res) => {
       phoneNumber,
       photoUrl,
       backgroundPhotoUrl,
+      openTime, // New value for opening time
+      closeTime, // New value for closing time
       shopId,
     ];
 
@@ -216,10 +227,109 @@ const updateShopInfo = async (req, res) => {
   }
 };
 
+const getAllPostsForShop = async (req, res) => {
+  try {
+    // Extract shop ID from URL parameters and validate format
+    const shopId = parseInt(req.params.shopId);
+    if (isNaN(shopId)) {
+      return res.status(400).json({ message: "Invalid shop ID format" });
+    }
+
+    // Construct query to retrieve posts with matching shop ID
+    const sql = `SELECT * FROM Posts WHERE shop_id = ?`;
+
+    // Execute query using prepared statement
+    const [rows] = await pool.execute(sql, [shopId]);
+
+    if (rows.length > 0) {
+      res.json(rows); // Return all posts for the shop
+    } else {
+      res.status(404).json({ message: "No posts found for this shop" });
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+const getFollowersInfoForShop = async (req, res) => {
+  try {
+    const shopId = parseInt(req.params.shopId); // Extract shop ID from URL parameter
+
+    const [rows] = await pool.query(
+      `SELECT u.user_id, u.username,u.photo_url
+       FROM Users u
+       INNER JOIN UserShopFollows usf ON u.user_id = usf.user_id
+       WHERE usf.shop_id = ?`,
+      [shopId]
+    );
+    console.log("rows", rows);
+
+    console.log(
+      "rows0-----------------------------------------------------------------------"
+    );
+
+    if (rows.length === 0) {
+      return res
+        .status(404)
+        .json({ message: "Shop not found or has no followers" });
+    }
+
+    const followers = rows.map((row) => ({
+      userId: row.user_id,
+      username: row.username,
+      photo_url: row.photo_url,
+    }));
+
+    res.json({ followers });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error fetching followers" });
+  }
+};
+
+const updateOrderStatus = async (req, res) => {
+  try {
+    // Extract order ID and new status from request body
+    const { order_id, new_status } = req.body;
+
+    // Validate order ID format (consider adding checks as needed)
+    if (!Number.isInteger(order_id)) {
+      return res.status(400).json({ message: "Invalid order ID format" });
+    }
+
+    // Validate new status (optional, add checks based on your allowed statuses)
+    if (
+      !new_status ||
+      !["pending", "processing", "completed", "cancelled"].includes(new_status)
+    ) {
+      return res.status(400).json({ message: "Invalid new order status" });
+    }
+
+    // Update order status in database
+    const updateQuery = `UPDATE orders SET status = ? WHERE order_id = ?`;
+    const updateValues = [new_status, order_id];
+
+    const [updateResult] = await pool.execute(updateQuery, updateValues);
+
+    // Check if update was successful
+    if (updateResult.affectedRows > 0) {
+      res.json({ message: "Order status updated successfully" });
+    } else {
+      res.status(404).json({ message: "Order not found" });
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
 module.exports = {
   addNewPost,
   addNewCategory,
   signupShop,
   signInShop,
   updateShopInfo,
+  getAllPostsForShop,
+  getFollowersInfoForShop,
+  updateOrderStatus,
 };

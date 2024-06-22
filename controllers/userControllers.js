@@ -19,8 +19,8 @@ const signUpUser = async (req, res) => {
       return res.status(409).json({ message: "This phone already exists" });
     }
     const [rows] = await pool.query(
-      "INSERT INTO Users (username,phone , password,city,address,photo_url) VALUES (?, ?, ?,?,?,?)",
-      [username, phone, hashedPassword, city, address, photo_url]
+      "INSERT INTO Users (username, phone, password, city, address, photo_url, num_order, points) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      [username, phone, hashedPassword, city, address, photo_url, 0, 0] // Add default values for num_order and points
     );
     const createdUserId = rows.insertId;
     res.json({ message: "User created successfully!", userId: createdUserId });
@@ -350,6 +350,89 @@ const updateUserInformation = async (req, res) => {
   }
 };
 
+const makeOrder = async (req, res) => {
+  try {
+    // Extract user ID, shop ID, meals, and special instructions from request body
+    const { user_id, shop_id, meals, special_instructions = "" } = req.body;
+
+    // Validate request body format
+    if (!user_id || !shop_id || !Array.isArray(meals)) {
+      return res.status(400).json({ message: "Invalid request body format" });
+    }
+
+    // Prepare order data
+    const orderData = {
+      user_id,
+      shop_id,
+      special_instructions,
+      created_at: new Date(),
+      total_price: 0, // Initialize total price
+      order_meals: [], // Array to store order meal details
+    };
+
+    // Loop through each meal in the request
+    for (const meal of meals) {
+      // Extract meal ID and quantity
+      const { meal_id, quantity } = meal;
+
+      // Validate meal data format
+      if (!meal_id || typeof quantity !== "number" || quantity <= 0) {
+        return res
+          .status(400)
+          .json({ message: "Invalid meal data in request" });
+      }
+
+      // Fetch meal details (including price) from database
+      const [mealResult] = await pool.query(
+        "SELECT price FROM meals WHERE meal_id = ?",
+        [meal_id]
+      );
+
+      if (!mealResult.length) {
+        return res
+          .status(404)
+          .json({ message: `Meal with ID ${meal_id} not found` });
+      }
+
+      const mealPrice = mealResult[0].price;
+
+      // Add meal details with price to order_meals array
+      orderData.order_meals.push({
+        meal_id,
+        quantity,
+        price: mealPrice,
+      });
+
+      // Update total price
+      orderData.total_price += mealPrice * quantity;
+    }
+
+    // Build insert query with prepared statement
+    const insertQuery = `INSERT INTO orders (user_id, shop_id, special_instructions, created_at, total_price) VALUES (?, ?, ?, ?, ?)`;
+    const insertValues = [
+      orderData.user_id,
+      orderData.shop_id,
+      orderData.special_instructions,
+      orderData.created_at,
+      orderData.total_price,
+    ];
+
+    // Execute insert using prepared statement
+    const [insertResult] = await pool.execute(insertQuery, insertValues);
+
+    // Check if order insertion was successful
+    if (insertResult.affectedRows > 0) {
+      const orderId = insertResult.insertId;
+      res.json({ message: "Order placed successfully!", order_id: orderId });
+    } else {
+      res.status(500).json({ message: "Failed to create order" });
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
 module.exports = {
   signUpUser,
   signInUser,
@@ -362,4 +445,5 @@ module.exports = {
   unfollowShop,
   updateUserAddress,
   updateUserInformation,
+  makeOrder,
 };
