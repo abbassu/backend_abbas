@@ -452,7 +452,12 @@ const makeOrder = async (req, res) => {
     //   "SELECT users.user_id , users.lat_t , users.lon_t, user.address FROM users user_id = ?",
     //   [user_id]
     // );
+
     // console.log("userinfo", userInfo);
+
+    const updateQuery =
+      "UPDATE shop SET num_orders = num_orders + 1 WHERE shop_id = ?";
+    const [result] = await pool.execute(updateQuery, [shop_id]);
 
     // Build insert query with prepared statement
     const insertQuery = `INSERT INTO orders (user_id, shop_id, special_instructions, created_at, total_price) VALUES (?, ?, ?, ?, ?)`;
@@ -510,6 +515,20 @@ const getAllShopFavorite = async (req, res) => {
     res.status(500).send("Internal Server Error");
   }
 };
+
+const removefavorite = async (req, res) => {
+  const { user_id, shop_id } = req.body;
+  try {
+    await pool.execute(
+      "DELETE FROM favorites WHERE user_id = ? AND shop_id = ?",
+      [user_id, shop_id]
+    );
+    res.json({ message: "Favorite shop removed" });
+  } catch (err) {
+    res.status(500).send(err);
+  }
+};
+
 module.exports = {
   signUpUser,
   signInUser,
@@ -525,4 +544,5 @@ module.exports = {
   makeOrder,
   makeFavorite,
   getAllShopFavorite,
+  removefavorite,
 };

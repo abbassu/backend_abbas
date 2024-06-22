@@ -344,6 +344,28 @@ const getAllOrder = async (req, res) => {
   }
 };
 
+const incrementorder = async (req, res) => {
+  const { shop_id } = req.params;
+
+  try {
+    // Increment num_orders for the shop
+    const updateQuery =
+      "UPDATE shop SET num_orders = num_orders + 1 WHERE shop_id = ?";
+    const [result] = await pool.execute(updateQuery, [shop_id]);
+
+    if (result.affectedRows > 0) {
+      res.json({
+        message: `Successfully incremented num_orders for shop ID ${shop_id}`,
+      });
+    } else {
+      res.status(404).json({ message: `Shop with ID ${shop_id} not found` });
+    }
+  } catch (error) {
+    console.error("Error incrementing num_orders:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
 module.exports = {
   addNewPost,
   addNewCategory,
@@ -354,4 +376,5 @@ module.exports = {
   getFollowersInfoForShop,
   updateOrderStatus,
   getAllOrder,
+  incrementorder,
 };

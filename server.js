@@ -28,6 +28,8 @@ app.post("/api/users/signup", userControllers.signUpUser);
 app.post("/api/users/makeorder", userControllers.makeOrder);
 
 app.post("/api/users/signin", userControllers.signInUser);
+app.post("/api/shop/incrementorder/:shop_id", shopControllers.incrementorder);
+
 app.get("/api/posts/popular", userControllers.getPopularPost);
 
 const verifyJWT = (req, res, next) => {
@@ -173,6 +175,7 @@ app.get("/api/classification", systemControllers.getAllClassification);
 
 app.post("/api/user/favorite", userControllers.makeFavorite);
 app.get("/api/user/favorite", userControllers.getAllShopFavorite);
+app.delete("/api/user/favorite", userControllers.removefavorite);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
