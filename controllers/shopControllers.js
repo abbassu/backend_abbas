@@ -3,31 +3,38 @@ const pool = require("../database/db");
 const jwt = require("jsonwebtoken");
 const JWT_SECRET = "05677015161718";
 const addNewPost = async (req, res) => {
+  console.log("rrrrrrrr", req.shop);
+
   try {
     const { content, title, URL_photo, categoryId } = req.body; // Include URL_photo in request body
+    const { shopId } = req.shop; // Assume shopId is passed in req.shop
+
+    console.log("a99999999ll --", content, title, URL_photo, categoryId);
 
     if (!content || !title || !URL_photo || !categoryId) {
       return res.status(400).json({
-        message: "Missing required fields: content, title, and URL_photo",
+        message:
+          "Missing required fields: content, title, URL_photo, and categoryId",
       });
     }
 
     const [rows] = await pool.query(
       "INSERT INTO Posts (shop_id, content, title, URL_photo) VALUES (?, ?, ?, ?)",
-      [req.shop.shopId, content, title, URL_photo] // Add URL_photo to query
+      [shopId, content, title, URL_photo] // Add URL_photo to query
     );
+    console.log("rooowss    ", rows);
     const postId = rows.insertId;
 
     // Insert post-category relationship into postcategories table
-    await pool.query(
-      "INSERT INTO postcategories (post_id, category_id) VALUES (?, ?)",
-      [postId, categoryId]
-    );
+    // await pool.query(
+    //   "INSERT INTO postcategories (post_id, category_id) VALUES (?, ?)",
+    //   [postId, categoryId]
+    // );
 
     res.json({
       message: "Post created successfully!",
       postId,
-      ID: req.shop.shopId,
+      ID: shopId,
     });
   } catch (error) {
     console.error(error);
@@ -122,21 +129,23 @@ const signupShop = async (req, res) => {
 
 const signInShop = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { phone, password } = req.body;
 
     // Basic validation
-    if (!email || !password) {
+    if (!phone || !password) {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
     // Check if shop exists with the provided email
     const [rows] = await pool.query(
-      "SELECT shop_id, email ,password_hash FROM Shop WHERE email = ?",
-      [email]
+      "SELECT shop_id, phone_number ,password_hash FROM Shop WHERE phone_number = ?",
+      [phone]
     );
 
     if (rows.length === 0) {
-      return res.status(401).json({ message: "Invalid email or password" });
+      return res
+        .status(401)
+        .json({ message: "Invalid phone_number or password" });
     }
 
     const shop = rows[0]; // Get shop data
@@ -145,7 +154,9 @@ const signInShop = async (req, res) => {
     const passwordMatch = await bcrypt.compare(password, shop.password_hash);
 
     if (!passwordMatch) {
-      return res.status(401).json({ message: "Invalid email or password" });
+      return res
+        .status(401)
+        .json({ message: "Invalid phone_number or password" });
     }
     console.log("vvvvvvvv\n");
 
