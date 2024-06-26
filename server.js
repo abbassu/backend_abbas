@@ -9,6 +9,8 @@ const payload = { userId: 123 };
 const secretKey = "your_secret_key"; // Replace with your own secret key
 const token = jwt.sign(payload, secretKey, { expiresIn: "3h" });
 
+// XYBJYZHPUTU1RLFEDRRGZ7S5
+
 console.log("Generated token:", token);
 
 const app = express();
@@ -71,12 +73,18 @@ const verifyJWTShop = (req, res, next) => {
   });
 };
 
+app.post("/api/verify-otp", userControllers.verifyOTP);
 ///////////////////////////
 //add new posts
 app.post("/api/posts", verifyJWTShop, shopControllers.addNewPost);
 app.post("/api/categories", verifyJWTShop, shopControllers.addNewCategory);
 app.get("/api/categories", systemControllers.getAllCategories);
 app.put("/api/shops/update", verifyJWTShop, shopControllers.updateShopInfo);
+app.delete(
+  "/api/shops/menus/:menuId",
+  verifyJWTShop,
+  menuControllers.deleteMenu
+);
 
 app.put("/api/user/update", verifyJWT, userControllers.updateUserInformation);
 
@@ -175,6 +183,10 @@ app.get("/api/classification", systemControllers.getAllClassification);
 
 app.post("/api/user/favorite", userControllers.makeFavorite);
 app.get("/api/user/favorite", userControllers.getAllShopFavorite);
+app.get("/api/shopdetail", shopControllers.getShopDetails);
+
+app.get("/api/driver/order", driverControllers.getAllNottakenOrder);
+
 app.delete("/api/user/favorite", userControllers.removefavorite);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////

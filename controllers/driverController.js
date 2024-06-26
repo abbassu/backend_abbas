@@ -152,7 +152,33 @@ const signinDriver = async (req, res) => {
   }
 };
 
+const getAllNottakenOrder = async (req, res) => {
+  const { city } = req.body;
+
+  if (!city) {
+    return res
+      .status(400)
+      .json({ message: "City name is required in the request body" });
+  }
+
+  try {
+    const [rows] = await pool.query(
+      `
+      SELECT o.order_id, o.user_id, o.shop_id, o.status, o.created_at, o.total_price, o.delivery_fee, o.special_instructions, o.taken, o.promocode_id, o.lon_t, o.lat_t, o.address
+      FROM orders o
+      WHERE o.address = ? AND o.taken <> 1;
+    `,
+      [city]
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error("Error fetching orders:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
 module.exports = {
   signupDriver,
   signinDriver,
+  getAllNottakenOrder,
 };

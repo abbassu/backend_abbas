@@ -2,6 +2,36 @@ const bcrypt = require("bcrypt");
 const pool = require("../database/db");
 const jwt = require("jsonwebtoken");
 const JWT_SECRET = "05677015161718";
+const crypto = require("crypto");
+const { Vonage } = require("@vonage/server-sdk");
+// Nexmo (Vonage) configuration
+const vonage = new Vonage({
+  apiKey: "8577c270",
+  apiSecret: "7kAVWXJD541VCdkf",
+});
+
+const generateOTP = () => {
+  return crypto.randomInt(100000, 999999).toString();
+};
+
+const sendOTP = async (phone, otp) => {
+  return new Promise((resolve, reject) => {
+    vonage.sms.send(
+      {
+        to: "970567701516",
+        from: "Vonage",
+        text: `Your OTP code is ${otp}`,
+      },
+      (err, responseData) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(responseData);
+        }
+      }
+    );
+  });
+};
 
 const signUpUser = async (req, res) => {
   try {
@@ -45,6 +75,54 @@ const signUpUser = async (req, res) => {
       return res.status(409).json({ message: "This phone already exists" });
     }
 
+    // Generate OTP
+    const otp = generateOTP();
+
+    // Insert OTP into database
+    const [otpResult] = await pool.query(
+      "INSERT INTO OTPs (phone, otp) VALUES (?, ?)",
+      [phone, otp]
+    );
+
+    // Send OTP to user's phone
+    await sendOTP(phone, otp);
+
+    res.json({ message: "OTP sent to phone number for verification" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error creating user" });
+  }
+};
+
+const verifyOTP = async (req, res) => {
+  console.log("phone,otp", req.body.phone, req.body.otp);
+
+  try {
+    const { phone, otp } = req.body;
+
+    if (!phone || !otp) {
+      return res
+        .status(400)
+        .json({ message: "Missing required fields: phone and otp" });
+    }
+
+    // Verify OTP
+    const [otpResult] = await pool.query(
+      "SELECT * FROM OTPs WHERE phone = ? AND otp = ?",
+      [phone, otp]
+    );
+
+    if (otpResult.length === 0) {
+      return res.status(400).json({ message: "Invalid OTP" });
+    }
+
+    // OTP is valid, proceed to create the user
+    const { username, password, city, address, photo_url, lat_t, lon_t } =
+      req.body;
+
+    // Hash the password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
     // Insert new user into the database
     const [rows] = await pool.query(
       `INSERT INTO Users (username, phone, password, city, address, photo_url, num_order, points, lat_t, lon_t) 
@@ -60,15 +138,18 @@ const signUpUser = async (req, res) => {
         0,
         lat_t,
         lon_t,
-      ] // Default values for num_order and points
+      ]
     );
 
     const createdUserId = rows.insertId;
 
+    // Delete OTP after successful verification
+    await pool.query("DELETE FROM OTPs WHERE phone = ?", [phone]);
+
     res.json({ message: "User created successfully!", userId: createdUserId });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "Error creating user" });
+    res.status(500).json({ message: "Error verifying OTP and creating user" });
   }
 };
 
@@ -394,8 +475,18 @@ const updateUserInformation = async (req, res) => {
 
 const makeOrder = async (req, res) => {
   try {
-    // Extract user ID, shop ID, meals, and special instructions from request body
-    const { user_id, shop_id, meals, special_instructions = "" } = req.body;
+    // Extract order details from request body
+    const {
+      user_id,
+      shop_id,
+      meals,
+      special_instructions = "",
+      delivery_fee = 0,
+      promocode_id = null,
+      lon_t,
+      lat_t,
+      address,
+    } = req.body;
 
     // Validate request body format
     if (!user_id || !shop_id || !Array.isArray(meals)) {
@@ -409,6 +500,12 @@ const makeOrder = async (req, res) => {
       special_instructions,
       created_at: new Date(),
       total_price: 0, // Initialize total price
+      delivery_fee,
+      taken: 0, // Assuming 'taken' is default to 0 when order is placed
+      promocode_id,
+      lon_t,
+      lat_t,
+      address,
       order_meals: [], // Array to store order meal details
     };
 
@@ -448,25 +545,29 @@ const makeOrder = async (req, res) => {
       // Update total price
       orderData.total_price += mealPrice * quantity;
     }
-    // const [userInfo] = await pool.query(
-    //   "SELECT users.user_id , users.lat_t , users.lon_t, user.address FROM users user_id = ?",
-    //   [user_id]
-    // );
 
-    // console.log("userinfo", userInfo);
-
+    // Update the shop's num_orders count
     const updateQuery =
       "UPDATE shop SET num_orders = num_orders + 1 WHERE shop_id = ?";
-    const [result] = await pool.execute(updateQuery, [shop_id]);
+    await pool.execute(updateQuery, [shop_id]);
 
     // Build insert query with prepared statement
-    const insertQuery = `INSERT INTO orders (user_id, shop_id, special_instructions, created_at, total_price) VALUES (?, ?, ?, ?, ?)`;
+    const insertQuery = `INSERT INTO orders 
+      (user_id, shop_id, status, created_at, total_price, delivery_fee, special_instructions, taken, promocode_id, lon_t, lat_t, address) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
     const insertValues = [
       orderData.user_id,
       orderData.shop_id,
-      orderData.special_instructions,
+      "Pending", // Default status
       orderData.created_at,
       orderData.total_price,
+      orderData.delivery_fee,
+      orderData.special_instructions,
+      orderData.taken,
+      orderData.promocode_id,
+      orderData.lon_t,
+      orderData.lat_t,
+      orderData.address,
     ];
 
     // Execute insert using prepared statement
@@ -545,4 +646,5 @@ module.exports = {
   makeFavorite,
   getAllShopFavorite,
   removefavorite,
+  verifyOTP,
 };

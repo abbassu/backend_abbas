@@ -49,6 +49,46 @@ const addMenu = async (req, res) => {
   }
 };
 
+const deleteMenu = async (req, res) => {
+  const menuId = parseInt(req.params.menuId);
+
+  if (!menuId) {
+    return res.status(400).json({ message: "Missing required field: menuId" });
+  }
+
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    // Delete all meals associated with the menu
+    const [mealsResult] = await connection.query(
+      "DELETE FROM Meals WHERE menu_id = ?",
+      [menuId]
+    );
+
+    // Delete the menu
+    const [menuResult] = await connection.query(
+      "DELETE FROM Menus WHERE menu_id = ?",
+      [menuId]
+    );
+
+    await connection.commit();
+
+    if (menuResult.affectedRows === 0) {
+      return res.status(404).json({ message: "Menu not found" });
+    }
+
+    res.json({ message: "Menu and associated meals deleted successfully!" });
+  } catch (error) {
+    await connection.rollback();
+    console.error(error);
+    res.status(500).json({ message: "Error deleting menu and meals" });
+  } finally {
+    connection.release();
+  }
+};
+
 const addMeal = async (req, res) => {
   const menuId = parseInt(req.params.menuId);
 
@@ -215,6 +255,7 @@ module.exports = {
   addMenu,
   addMeal,
   deleteMeal,
+  deleteMenu,
   updateMeal,
   getAllMealsForMenu,
   getAllMenusForShop,

@@ -377,6 +377,30 @@ const incrementorder = async (req, res) => {
   }
 };
 
+const getShopDetails = async (req, res) => {
+  const { shopId } = req.body;
+
+  if (!shopId) {
+    return res.status(400).json({ message: "Missing required field: shopId" });
+  }
+
+  try {
+    const [results] = await pool.query(
+      "SELECT shop_name, classification, photo_url FROM shop WHERE shop_id = ?",
+      [shopId]
+    );
+
+    if (results.length === 0) {
+      return res.status(404).json({ message: "Shop not found" });
+    }
+
+    res.json(results[0]);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error fetching shop details" });
+  }
+};
+
 module.exports = {
   addNewPost,
   addNewCategory,
@@ -388,4 +412,5 @@ module.exports = {
   updateOrderStatus,
   getAllOrder,
   incrementorder,
+  getShopDetails,
 };
