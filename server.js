@@ -187,6 +187,11 @@ app.get("/api/shopdetail", shopControllers.getShopDetails);
 
 app.get("/api/driver/order", driverControllers.getAllNottakenOrder);
 
+app.get(
+  "/api/shop/getClassification",
+  shopControllers.getShopsByClassification
+);
+
 app.delete("/api/user/favorite", userControllers.removefavorite);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////

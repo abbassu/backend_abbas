@@ -401,6 +401,27 @@ const getShopDetails = async (req, res) => {
   }
 };
 
+const getShopsByClassification = async (req, res) => {
+  const { classification } = req.body;
+
+  if (!classification) {
+    return res
+      .status(400)
+      .json({ message: "Classification is required in the request body" });
+  }
+
+  try {
+    const [rows] = await pool.query(
+      "SELECT * FROM shop WHERE classification = ?",
+      [classification]
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error("Error fetching shops:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
 module.exports = {
   addNewPost,
   addNewCategory,
@@ -413,4 +434,5 @@ module.exports = {
   getAllOrder,
   incrementorder,
   getShopDetails,
+  getShopsByClassification,
 };
